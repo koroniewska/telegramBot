@@ -1,9 +1,15 @@
-const TelegramApi = require('node-telegram-bot-api')
-const token = ;
+const TelegramApi = require('node-telegram-bot-api');
+const sequelize = require('./db');
+const UserModel = require('./models');
+const token = '';
+
+const destinationChatId = 440848273;
+
 const bot = new TelegramApi(token, {polling: true})
 
 const start = () => {
 
+    let originalUserName = '';
     Data = new Date();
     let hours = Data.getHours();
     let currentGreeting = '';
@@ -15,13 +21,14 @@ const start = () => {
             currentGreeting = 'Good afternoon'
         } else currentGreeting = 'Good evening'
     }
+
     gettingTime();
 
     const nameOptions = {
         reply_markup: JSON.stringify({
             inline_keyboard: [
-                [{text:'Yes, you may', callback_data: 'yes'}],
-                [{text:'No, I will send your only option now', callback_data: 'no'}]
+                [{text: 'Yes, you may', callback_data: 'yes'}],
+                [{text: 'No, I will send you the only option now', callback_data: 'no'}]
             ]
         })
     }
@@ -39,28 +46,83 @@ const start = () => {
         const text = msg.text;
         const userId = msg.chat.id;
 
-        if (text === '/start') {
-            await bot.sendSticker(userId, './sticker.png')
-            return bot.sendMessage(userId, `${currentGreeting}, dear Guest. Would you like me to call you ${msg.from.first_name}?`, nameOptions)
+        try {
+            if (text === '/start') {
+                //await UserModel.create({chatId})
+                await bot.sendSticker(userId, './sticker.png')
+                return bot.sendMessage(userId, `${currentGreeting}, dear Guest. Would you like me to call you ${msg.from.first_name}?`, nameOptions)
+            }
+            if (text === '/info') {
+                return bot.sendMessage(userId, `You could submit any media content for the channel here. It will be inspected and possibly posted on the channel.`)
+            }
+
+            if (text === '/help') {
+                return bot.sendMessage(userId, 'To get the help you need, please contact us at this email address - ')
+            }
+
+            if (text === '/co') {
+                return bot.sendMessage(userId, 'Please contact us at this email address - ')
+            }
+
+        } catch (error) {
+            return bot.sendMessage(userId, 'Something went wrong')
         }
-        if (text === '/info') {
-            return bot.sendMessage(userId, `You could submit any media content for the channel here. It will be inspected and possibly posted on the channel. Thank you, ${msg.from.first_name}`)
-        }
-        return bot.sendMessage(userId, 'May I ask you to send me one of the available commands, please')
     })
 
-    bot.on('callback_query', async msg => {
+    const userPreferableName = {};
+    let waitForName = false;
 
-        const userName = msg.from.first_name;
+    bot.on('callback_query', async msg => {
         const data = msg.data;
         const chatId = msg.message.chat.id;
 
-        if (data === 'yes') {
-            return bot.sendMessage(chatId, `Thank you, ${userName}, how can I help you?`)
-        } else {
-            return bot.sendMessage(chatId, `Please send the name you prefer, dear Guest`)
+
+        if (data === 'yes' && !originalUserName) {
+            return bot.sendMessage(chatId, `Thank you, ${msg.from.first_name}! Now you can send anything you want to be posted in the channel`);
+        } else if (originalUserName) {
+            return bot.sendMessage(chatId, `You've already chosen a name, haven't you?`)
         }
-    })
+        if (data === 'no' && !originalUserName) {
+            waitForName = true;
+            return bot.sendMessage(chatId, `Please send the name you prefer`);
+        } else if (originalUserName) {
+            await bot.sendMessage(chatId, `You've already chosen a name, haven't you?`)
+        }
+    });
+
+    bot.onText(/(.+)/, async (msg, match) => {
+        const userId = msg.chat.id;
+        const newName = match[1];
+
+        if (waitForName) {
+            if (!userPreferableName[userId]) {
+                userPreferableName[userId] = {name: newName};
+                originalUserName = newName;
+                await bot.sendMessage(userId, `Great, thank you, ${originalUserName}. Now you can send anything you want to be posted in the channel`);
+            } else if (userPreferableName[userId]) {
+                await bot.sendMessage(userId, `You've already chosen a name, haven't you?`);
+            }
+        }
+        waitForName = false;
+    });
+
+    bot.on('message', async (msg) => {
+
+        const chatId = msg.chat.id;
+        if (msg.photo || msg.video || msg.document) {
+            await bot.forwardMessage(destinationChatId, chatId, msg.message_id);
+        }
+    });
+
+    bot.on('message', async (msg) => {
+        const userId = msg.chat.id;
+
+        let name = originalUserName !== msg.from.first_name && originalUserName ? originalUserName : msg.from.first_name
+        if (msg.photo || msg.video || msg.document) {
+            await bot.sendMessage(userId, `Thank you so much, ${name}. A great choice! 🖤`);
+        }
+    });
+
 }
 
 start();
