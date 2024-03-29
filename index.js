@@ -1,7 +1,7 @@
 const TelegramApi = require('node-telegram-bot-api');
 const sequelize = require('./db');
 const UserModel = require('./models');
-const token = '';
+const token = '5398982464:AAHqK9WmtYnUxlzI1T7rvvFqU0xivKjM9vY';
 
 const destinationChatId = 440848273;
 
@@ -114,15 +114,19 @@ const start = () => {
         }
     });
 
+
+    let mediaGroupReceived = false;
+
     bot.on('message', async (msg) => {
         const userId = msg.chat.id;
-
-        let name = originalUserName !== msg.from.first_name && originalUserName ? originalUserName : msg.from.first_name
+        let name = originalUserName !== msg.from.first_name && originalUserName ? originalUserName : msg.from.first_name;
         if (msg.photo || msg.video || msg.document) {
-            await bot.sendMessage(userId, `Thank you so much, ${name}. A great choice! 🖤`);
+            if (!mediaGroupReceived) {
+                await bot.sendMessage(userId, `Thank you so much, ${name}. A great choice! 🖤`);
+                mediaGroupReceived = true;
+            }
         }
     });
-
 }
 
 start();
